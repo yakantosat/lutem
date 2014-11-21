@@ -33,7 +33,7 @@ lutem = {
 }
 
 
---utils
+--utils 将t1中的值全部保存进一个表中
 local function obj_copy(t1)
 	local tb = {}
 	for k,v in pairs(t1) do 
@@ -46,6 +46,7 @@ local function obj_copy(t1)
 	return tb
 end
 
+--生成一个新的 ast_node，并将 ntype,parent,content 赋予它
 local function new_ast_node(ntype, parent, content)
 	tb = obj_copy(ast_node)
 	tb.parent_ = parent
@@ -54,6 +55,7 @@ local function new_ast_node(ntype, parent, content)
 	return tb
 end
 
+--类方法 new，初始化 lutem 类中的所有元数据
 function lutem:new()
 	local o = {}
 	o.output_ = {}   
@@ -72,64 +74,71 @@ end
 -- return: (cmd, arglist)
 -- 	  cmd --  command name
 -- 	  arglist -- an array of arglist(according to command)
+-- 分析字符串，从中获得命令字符串以及包含的可迭代对象以及变量。
 local function parse_instr(s)
 	local nf = 0
-	local cmd = nil
-	local arglist = {}	
-	local arr_token = {}
-	for f in string.gmatch(s, "([^ \t\r\n]+)") do
-		table.insert(arr_token, f)
-		nf = nf + 1
+	local cmd = nil                     --保存命令字符串，arr_token 中的第一个字符串
+	local arglist = {}	            -- 保存可迭代的对象或变量
+	local arr_token = {}                --保存非空字符串
+	for f in string.gmatch(s, "([^ \t\r\n]+)") do --匹配非空字符，例如空格、制表符、回车等，s 是字符串
+		table.insert(arr_token, f)  --将获取的非空字符串保存进arr_token 表
+		nf = nf + 1                 --计数器+1
 	end
 	--check token
-	if nf < 1 then return "", -1 end
-	cmd = arr_token[1]
-	if cmd == "for" then
-		if nf ~= 4 and nf ~= 5 then return "",{} end
-		if arr_token[nf-1] ~= "in" then return "",{} end
-		if nf == 5 then 
+	if nf < 1 then return "", -1 end    --如果字符串中不含非空字符串，则返回空串和-1
+	cmd = arr_token[1]                  --从 arr_token 表中获取第一个字符串作为命令字符串
+	if cmd == "for" then                --如果 cmd 是 "for"字符串
+		if nf ~= 4 and nf ~= 5 then return "",{} end  --如果计数器不为4或5，那么返回空串和空表
+		if arr_token[nf-1] ~= "in" then return "",{} end  --如果 arr_token 中倒数第二个字符串不是"in"，返回空串和空表
+		if nf == 5 then             --若计数器为5
 			--maybe has space between iter key and value, join them
-			table.insert(arglist, arr_token[2]..arr_token[3])
+			table.insert(arglist, arr_token[2]..arr_token[3]) --将 arr_token 中第二个和第三个合并，插入 arglist
 		else 
-			table.insert(arglist, arr_token[2])
+			table.insert(arglist, arr_token[2]) --否则将第二个插入 arglist 中
 		end
 
-		table.insert(arglist, arr_token[nf])
-	elseif cmd == "endfor" or cmd == "endblock" then
+		table.insert(arglist, arr_token[nf]) --将 arr_token 中最后一个插入 arglist 中
+	elseif cmd == "endfor" or cmd == "endblock" then --如果cmd 为"endfor"或"endblock"
 		--no param
-		if nf > 1 then return "",{} end
-	elseif cmd == "extend" or cmd == "block" then
+		if nf > 1 then return "",{} end  --若计数器大于1，返回空串和空表
+	elseif cmd == "extend" or cmd == "block" then --如果 cmd 为"extend"或"block"
 		--only 1 param
-		if nf > 2 then return "",{} end 
-		table.insert(arglist, arr_token[2])
+		if nf > 2 then return "",{} end --若计数器大于2，那么返回空串和空表
+		table.insert(arglist, arr_token[2]) --将 arr_token 中第二个元素插入 arglist 表中
 	end
-	return cmd, arglist
+	return cmd, arglist --返回命令字符串和 arglist 表
 end
+
 
 local function print_node(node, prefix)
-	if node.node_type == NODE_FOR then
-		print(prefix .. " " .. node.content[2])
-	else 
-		print(prefix .. " " .. node.content)
+	if node.node_type == NODE_FOR then  --若节点类型为 NODE_FOR
+		print(prefix .. " " .. node.content[2]) --打印"prefix+node.content[2]"
+	else                                -- 否则
+		print(prefix .. " " .. node.content) -- 打印"prefix+node.content"
 	end
 end
 
+--类方法，parse_file
 function lutem:parse_file(filename, path)
-	srclines = {}
+	srclines = {}    --HTML 文件按行存储入 srclines 表
 	local f, err = io.open(self.path_root_..filename, 'r')
 	if f == nil then return -1,"parse file error "..filename  end
 
 	for line in f:lines() do
-		table.insert(srclines, line .. "\n")
+		table.insert(srclines, line .. "\n") --将文件安行保存入 srclines 表
 	end
 	f:close()
 
 	--compile it
 	local node = nil
 	local extend_from = nil
+	--cur_block 为一个类型为 NODE_BLOCK 的，父节点为 nil 的，内容为"__root"的新节点
 	local cur_block = new_ast_node(NODE_BLOCK, nil, "__root")
+	-- 父节点 cur_parent 为 cur_block
 	local cur_parent = cur_block
+	-- cur_text 为一个类型为 NODE_TEXT，父节点为 cur_parent，内容为空串的新节点
 	local cur_text = new_ast_node(NODE_TEXT, cur_parent, "")
+	-- 块"__root"为 cur_parent
 	self.blocks_["__root"] = cur_parent
 	self.node_root_ = cur_parent
 	
