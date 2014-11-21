@@ -142,8 +142,8 @@ function lutem:parse_file(filename, path)
 	self.blocks_["__root"] = cur_parent
 	self.node_root_ = cur_parent
 	
-	local cur_lno = 1
-	local lex_bstart = '{[{%%]'
+	local cur_lno = 1  --当前行号
+	local lex_bstart = '{[{%%]'  -- {%或{{
 	local pos_s, pos_e, pos_tmp
 	local last = 1
 	local i,j
@@ -152,7 +152,7 @@ function lutem:parse_file(filename, path)
 	local skip_block = 0
 	table.insert(bstack, cur_parent)
 	for lno,text in ipairs(srclines) do
-		while (last <= #text) do
+		while (last <= #text) do --逐个分析 srclines 中每个字符串的字符
 			--skip extended block
 			if skip_block == 1 then 
 				i, j = string.find(text, "{%%[ ]*endblock[ ]*%%}", last)
